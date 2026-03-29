@@ -4,13 +4,14 @@ set -euo pipefail
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-picker"
 WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
+WP_DIR="${WALLPAPER_LIBRARY_DIR:-$HOME/.wp}"
 SOURCE_URL="${UNSPLASH_SOURCE_URL:-https://unsplash.it/3840/2160/?random}"
 
 CURRENT_PREVIEW=""
 CURRENT_STAMP=""
 WEZTERM_BIN=""
 
-mkdir -p "$CACHE_DIR" "$WALLPAPER_DIR"
+mkdir -p "$CACHE_DIR" "$WALLPAPER_DIR" "$WP_DIR"
 
 cleanup() {
   if [ -n "${CURRENT_PREVIEW:-}" ] && [ -f "${CURRENT_PREVIEW:-}" ]; then
@@ -39,6 +40,13 @@ style_error() {
 
 style_success() {
   gum style --foreground 42 --bold "$@"
+}
+
+usage() {
+  cat <<EOF
+Usage: bg [-r|--random]
+  -r, --random   randomly set wallpaper from $WP_DIR
+EOF
 }
 
 require_cmd() {
@@ -128,11 +136,95 @@ show_photo() {
   printf '\n'
 }
 
-set_wallpaper() {
-  local target_file="$WALLPAPER_DIR/wallpaper-${CURRENT_STAMP}.jpg"
+next_name_suggestions() {
+  find "$WP_DIR" -maxdepth 1 -type f \( \
+      -iname '*.jpg' -o \
+      -iname '*.jpeg' -o \
+      -iname '*.png' -o \
+      -iname '*.webp' \
+    \) -print 2>/dev/null |
+    sed 's#^.*/##' |
+    sed 's/\.[^.]*$//' |
+    awk '
+      {
+        stem=$0
+        if (match(stem, /[0-9]+$/)) {
+          base=substr(stem, 1, RSTART-1)
+          n=substr(stem, RSTART)+0
+        } else {
+          base=stem
+          n=1
+        }
+        if (n > max[base]) max[base]=n
+      }
+      END {
+        for (base in max) print base (max[base] + 1)
+      }
+    ' | sort
+}
+
+prompt_wallpaper_name() {
+  local suggestions
+  local name
+
+  suggestions="$(next_name_suggestions)"
+
+  if [ -n "$suggestions" ]; then
+    name="$(printf '%s\n' "$suggestions" | gum filter \
+      --header "Как назвать обои? Введи своё или выбери подсказку" \
+      --placeholder "Например: sea4" \
+      --height 10 \
+      --no-fuzzy)" || exit 130
+  else
+    name="$(gum input \
+      --header "Как назвать обои?" \
+      --placeholder "Например: sea1")" || exit 130
+  fi
+
+  name="$(printf '%s' "$name" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  name="${name##*/}"
+  name="${name%.*}"
+
+  if [ -z "$name" ]; then
+    style_error "Имя не может быть пустым." >&2
+    return 1
+  fi
+
+  printf '%s\n' "$name"
+}
+
+save_to_library() {
+  local source_file="$1"
+  local ext="${source_file##*.}"
+  local name target
+
+  while true; do
+    name="$(prompt_wallpaper_name)" || continue
+    target="$WP_DIR/$name.$ext"
+
+    if [ -e "$target" ]; then
+      if gum confirm "Файл $name.$ext уже есть. Перезаписать?"; then
+        cp "$source_file" "$target"
+        printf '%s\n' "$target"
+        return
+      fi
+      continue
+    fi
+
+    cp "$source_file" "$target"
+    printf '%s\n' "$target"
+    return
+  done
+}
+
+set_wallpaper_from_file() {
+  local source_file="$1"
+  local stamp="${CURRENT_STAMP:-$(date +%Y%m%d-%H%M%S)-$RANDOM}"
+  local ext="${source_file##*.}"
+  local target_file="$WALLPAPER_DIR/wallpaper-${stamp}.${ext}"
   local escaped_file
 
-  cp "$CURRENT_PREVIEW" "$target_file"
+  cp "$source_file" "$target_file"
   escaped_file="$(printf '%s' "$target_file" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 
   if ! osascript <<EOF
@@ -150,10 +242,63 @@ EOF
   style_success "Обои установлены: $target_file"
 }
 
+pick_random_library_wallpaper() {
+  local -a wallpapers
+  local file
+
+  while IFS= read -r -d '' file; do
+    wallpapers+=("$file")
+  done < <(find "$WP_DIR" -maxdepth 1 -type f \( \
+      -iname '*.jpg' -o \
+      -iname '*.jpeg' -o \
+      -iname '*.png' -o \
+      -iname '*.webp' \
+    \) -print0)
+
+  if [ "${#wallpapers[@]}" -eq 0 ]; then
+    style_error "В $WP_DIR пока нет сохранённых обоев." >&2
+    exit 1
+  fi
+
+  printf '%s\n' "${wallpapers[$((RANDOM % ${#wallpapers[@]}))]}"
+}
+
+set_random_wallpaper() {
+  local selected
+
+  selected="$(pick_random_library_wallpaper)"
+  CURRENT_STAMP="$(date +%Y%m%d-%H%M%S)-$RANDOM"
+  set_wallpaper_from_file "$selected"
+  style_note "Случайные обои: ${selected##*/}"
+}
+
 main() {
-  local action
+  local action random_mode=0 saved_file
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -r|--random)
+        random_mode=1
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        style_error "Неизвестный флаг: $1" >&2
+        usage
+        exit 1
+        ;;
+    esac
+    shift
+  done
 
   ensure_setup
+
+  if [ "$random_mode" -eq 1 ]; then
+    set_random_wallpaper
+    exit 0
+  fi
 
   while true; do
     if ! fetch_photo; then
@@ -185,7 +330,9 @@ main() {
 
       case "$action" in
         "Поставить на обои")
-          set_wallpaper
+          saved_file="$(save_to_library "$CURRENT_PREVIEW")"
+          set_wallpaper_from_file "$saved_file"
+          style_note "Сохранено в библиотеку: $saved_file"
           exit 0
           ;;
         "Следующая")
