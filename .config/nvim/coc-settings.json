@@ -1,0 +1,5 @@
+{
+  "python.jediEnabled": false,
+  "rust-analyzer.diagnostics.enable": false,
+  "rust-analyzer.notifications.cargoTomlNotFound": false
+}

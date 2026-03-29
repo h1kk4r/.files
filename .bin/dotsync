@@ -1,0 +1,341 @@
+#!/usr/bin/env lua
+
+local HOME = os.getenv("HOME")
+local DEST = os.getenv("DOTFILE") or (HOME .. "/Project/.files")
+local WATCH = {
+  { path = ".bin/conf.rs", label = "fetch" },
+  { path = ".bin/bg", label = "bg script" },
+  { path = ".bin/dotsync", label = "dotsync script" },
+  { path = ".config/fish", label = "fish config" },
+  { path = ".config/nvim", label = "nvim config" },
+  { path = ".wezterm.lua", label = "wezterm config" },
+}
+
+local ANSI = {
+  reset = "\27[0m",
+  green = "\27[32m",
+  red = "\27[31m",
+  yellow = "\27[33m",
+}
+
+local function shq(s) return "'" .. tostring(s):gsub("'", [['"'"']]) .. "'" end
+local function trim(s) return (s or ""):gsub("%s+$", "") end
+local function code(a, _, c) if type(a) == "number" then return a end return a and 0 or (c or 1) end
+local function run(cmd) local a, b, c = os.execute(cmd) return code(a, b, c) == 0 end
+local function read(cmd)
+  local p = io.popen(cmd .. " 2>/dev/null")
+  if not p then return "" end
+  local out = p:read("*a") or ""
+  p:close()
+  return out
+end
+local function read_ui(cmd)
+  local p = io.popen(cmd)
+  if not p then return "" end
+  local out = p:read("*a") or ""
+  p:close()
+  return out
+end
+local function capture(cmd)
+  local p = io.popen("(" .. cmd .. ") 2>&1")
+  if not p then return false, "" end
+  local out = p:read("*a") or ""
+  local a, b, c = p:close()
+  return code(a, b, c) == 0, trim(out)
+end
+local function box(text, color)
+  os.execute(
+    "gum style --border rounded --border-foreground " .. tostring(color or 63) ..
+    " --padding '0 1' --margin '1 0' " .. shq(text)
+  )
+end
+local function note(text) os.execute("gum style --foreground 246 " .. shq(text)) end
+local function die(text) box(text, 196) os.exit(1) end
+local function exists(path) return run("test -e " .. shq(path)) end
+local function is_dir(path) return run("test -d " .. shq(path)) end
+local function is_link(path) return run("test -L " .. shq(path)) end
+local function dirname(path) return path:match("(.+)/[^/]+$") or "." end
+local function join(a, b) return b == "" and a or (a .. "/" .. b) end
+local function split(path)
+  local parts = {}
+  for part in path:gmatch("[^/]+") do table.insert(parts, part) end
+  return parts
+end
+
+local function kind(path)
+  if is_dir(path) then return "dir" end
+  if is_link(path) then return "link" end
+  if exists(path) then return "file" end
+  return "none"
+end
+
+local function list_leafs(path, path_kind)
+  local out = {}
+  if path_kind == "dir" then
+    local found = read("cd " .. shq(path) .. " && find . \\( -type f -o -type l \\) -print | sed 's#^\\./##'")
+    for line in found:gmatch("[^\n]+") do out[line] = true end
+  elseif path_kind ~= "none" then
+    out[""] = true
+  end
+  return out
+end
+
+local function sig(path)
+  local path_kind = kind(path)
+  if path_kind == "link" then
+    return "link:" .. trim(read("readlink " .. shq(path)))
+  end
+  if path_kind == "file" then
+    return "file:" .. trim(read("shasum -a 256 " .. shq(path) .. " | awk '{print $1}'"))
+  end
+  return path_kind
+end
+
+local function scan(entry)
+  local root = entry.path
+  local label = entry.label or root
+  local src_root, dst_root = HOME .. "/" .. root, DEST .. "/" .. root
+  local src_kind, dst_kind = kind(src_root), kind(dst_root)
+  if src_kind == "none" and dst_kind == "none" then return {} end
+
+  local keys, out = {}, {}
+  for rel in pairs(list_leafs(src_root, src_kind)) do keys[rel] = true end
+  for rel in pairs(list_leafs(dst_root, dst_kind)) do keys[rel] = true end
+
+  for rel in pairs(keys) do
+    local src, dst = join(src_root, rel), join(dst_root, rel)
+    local src_kind_leaf, dst_kind_leaf = kind(src), kind(dst)
+    local op = nil
+
+    if src_kind_leaf == "none" and dst_kind_leaf ~= "none" then
+      op = "delete"
+    elseif src_kind_leaf ~= "none" and dst_kind_leaf == "none" then
+      op = "new"
+    elseif sig(src) ~= sig(dst) then
+      op = "update"
+    end
+
+    if op then
+      local full = root
+      if rel ~= "" then full = full .. "/" .. rel end
+      table.insert(out, { rel = full, src = src, dst = dst, op = op, label = label })
+    end
+  end
+
+  return out
+end
+
+local function confirm(prompt)
+  return run("gum confirm --affirmative " .. shq("Да") .. " --negative " .. shq("Нет") .. " " .. shq(prompt))
+end
+
+local function write_text(header, placeholder)
+  return trim(read_ui(
+    "gum write" ..
+    " --header " .. shq(header) ..
+    " --height 6" ..
+    " --placeholder " .. shq(placeholder or "")
+  ))
+end
+
+local function mark(op)
+  if op == "new" then return ANSI.green .. "+" .. ANSI.reset end
+  if op == "delete" then return ANSI.red .. "-" .. ANSI.reset end
+  return ANSI.yellow .. "~" .. ANSI.reset
+end
+
+local function add_tree(root, item)
+  local node = root
+  local parts = split(item.rel)
+  for i = 1, #parts - 1 do
+    local name = parts[i]
+    node.children[name] = node.children[name] or { name = name, children = {}, leaf = nil }
+    node = node.children[name]
+  end
+  local leaf = parts[#parts]
+  node.children[leaf] = { name = leaf, children = {}, leaf = item }
+end
+
+local function child_names(node)
+  local names = {}
+  for name in pairs(node.children) do table.insert(names, name) end
+  table.sort(names, function(a, b)
+    local ad, bd = next(node.children[a].children) ~= nil, next(node.children[b].children) ~= nil
+    if ad ~= bd then return ad end
+    return a < b
+  end)
+  return names
+end
+
+local function render_tree(node, prefix, lines)
+  local names = child_names(node)
+  for i, name in ipairs(names) do
+    local child = node.children[name]
+    local last = i == #names
+    local branch = last and "└── " or "├── "
+    local next_prefix = prefix .. (last and "    " or "│   ")
+
+    if child.leaf then
+      table.insert(lines, prefix .. branch .. mark(child.leaf.op) .. " " .. child.name)
+    else
+      table.insert(lines, prefix .. branch .. child.name)
+      render_tree(child, next_prefix, lines)
+    end
+  end
+end
+
+local function tree_text(changes)
+  local root = { children = {} }
+  for _, item in ipairs(changes) do add_tree(root, item) end
+  local lines = {}
+  render_tree(root, "", lines)
+  return table.concat(lines, "\n")
+end
+
+local function apply(item)
+  if item.op == "delete" then
+    if not run("rm -rf " .. shq(item.dst)) then die("Не удалось удалить " .. item.rel) end
+    return
+  end
+
+  run("mkdir -p " .. shq(dirname(item.dst)))
+  if is_dir(item.dst) and not is_dir(item.src) then run("rm -rf " .. shq(item.dst)) end
+  if not run("rsync -a " .. shq(item.src) .. " " .. shq(item.dst)) then
+    die("Не удалось перенести " .. item.rel)
+  end
+end
+
+local function prune_empty_dirs()
+  for _, entry in ipairs(WATCH) do
+    local path = DEST .. "/" .. entry.path
+    if is_dir(path) then run("find " .. shq(path) .. " -depth -type d -empty -delete") end
+  end
+end
+
+local function default_message(changes)
+  local op_word = { new = "new", update = "upd", delete = "rm" }
+  local grouped = { new = {}, update = {}, delete = {} }
+  local seen, parts = {}, {}
+
+  for _, item in ipairs(changes) do
+    local key = item.op .. "\0" .. item.label
+    if not seen[key] then
+      seen[key] = true
+      table.insert(grouped[item.op], item.label)
+    end
+  end
+
+  for _, op in ipairs({ "new", "update", "delete" }) do
+    if #grouped[op] > 0 then
+      table.insert(parts, op_word[op] .. " " .. table.concat(grouped[op], ", "))
+    end
+  end
+
+  return table.concat(parts, ", ")
+end
+
+for _, cmd in ipairs({ "gum", "rsync", "git", "shasum" }) do
+  if not run("command -v " .. cmd .. " >/dev/null 2>&1") then die("Не найдена команда: " .. cmd) end
+end
+
+local changes = {}
+for _, entry in ipairs(WATCH) do
+  for _, item in ipairs(scan(entry)) do table.insert(changes, item) end
+end
+table.sort(changes, function(a, b) return a.rel < b.rel end)
+
+if #changes == 0 then
+  box("Изменений по списку нет.")
+  os.exit(0)
+end
+
+local new_count, update_count, delete_count = 0, 0, 0
+for _, item in ipairs(changes) do
+  if item.op == "new" then new_count = new_count + 1
+  elseif item.op == "delete" then delete_count = delete_count + 1
+  else update_count = update_count + 1 end
+end
+
+box("Найдено изменений: " .. #changes)
+print(tree_text(changes))
+note(
+  ANSI.green .. "+" .. ANSI.reset .. " new  " ..
+  ANSI.yellow .. "~" .. ANSI.reset .. " update  " ..
+  ANSI.red .. "-" .. ANSI.reset .. " delete"
+)
+note("new: " .. new_count .. ", update: " .. update_count .. ", delete: " .. delete_count)
+
+if not confirm("Перенести все эти изменения?") then
+  note("Перенос отменён.")
+  os.exit(0)
+end
+
+for _, item in ipairs(changes) do apply(item) end
+prune_empty_dirs()
+
+local summary = {
+  "Перенос: да (" .. #changes .. " files)",
+  "Commit: нет",
+  "Push: нет",
+}
+
+if not confirm("Закоммитим?") then
+  box(table.concat(summary, "\n"), 42)
+  os.exit(0)
+end
+if not run("git -C " .. shq(DEST) .. " rev-parse --is-inside-work-tree >/dev/null 2>&1") then
+  die("Папка назначения не является репозиторием.")
+end
+
+local paths, add = {}, {}
+for _, item in ipairs(changes) do paths[item.rel] = true end
+for rel in pairs(paths) do table.insert(add, rel) end
+table.sort(add)
+
+local quoted = {}
+for i, rel in ipairs(add) do quoted[i] = shq(rel) end
+local ok, out = capture("git -C " .. shq(DEST) .. " add -A -- " .. table.concat(quoted, " "))
+if not ok then
+  die("git add завершился с ошибкой.\n\n" .. out)
+end
+
+if run("git -C " .. shq(DEST) .. " diff --cached --quiet -- " .. table.concat(quoted, " ")) then
+  note("После переноса новых git-изменений нет.")
+  box(table.concat(summary, "\n"), 42)
+  os.exit(0)
+end
+
+local default_msg = default_message(changes)
+local msg = write_text("Commit message", default_msg)
+if msg == "" then msg = default_msg end
+
+local msg_file = trim(read("mktemp"))
+if msg_file == "" then
+  die("Не удалось создать временный файл для commit message.")
+end
+
+local fh = io.open(msg_file, "w")
+if not fh then
+  die("Не удалось открыть временный файл для commit message.")
+end
+fh:write(msg)
+fh:write("\n")
+fh:close()
+
+local commit_ok, commit_out = capture("git -C " .. shq(DEST) .. " commit -F " .. shq(msg_file) .. " -- " .. table.concat(quoted, " "))
+os.remove(msg_file)
+
+if not commit_ok then
+  die("git commit завершился с ошибкой.\n\n" .. commit_out)
+end
+summary[2] = "Commit: да (" .. trim(read("git -C " .. shq(DEST) .. " rev-parse --short HEAD")) .. ")"
+
+if confirm("Запушим?") then
+  local push_ok, push_out = capture("git -C " .. shq(DEST) .. " push")
+  if not push_ok then
+    die("git push завершился с ошибкой.\n\n" .. push_out)
+  end
+  summary[3] = "Push: да"
+end
+
+box(table.concat(summary, "\n"), 42)

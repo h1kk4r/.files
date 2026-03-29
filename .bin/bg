@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/wallpaper-picker"
+WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
+SOURCE_URL="${UNSPLASH_SOURCE_URL:-https://unsplash.it/3840/2160/?random}"
+
+CURRENT_PREVIEW=""
+CURRENT_STAMP=""
+WEZTERM_BIN=""
+
+mkdir -p "$CACHE_DIR" "$WALLPAPER_DIR"
+
+cleanup() {
+  if [ -n "${CURRENT_PREVIEW:-}" ] && [ -f "${CURRENT_PREVIEW:-}" ]; then
+    rm -f "$CURRENT_PREVIEW"
+  fi
+}
+
+trap cleanup EXIT
+
+style_block() {
+  gum style \
+    --border rounded \
+    --border-foreground 63 \
+    --padding "0 1" \
+    --margin "1 0" \
+    "$@"
+}
+
+style_note() {
+  gum style --foreground 246 "$@"
+}
+
+style_error() {
+  gum style --foreground 196 --bold "$@"
+}
+
+style_success() {
+  gum style --foreground 42 --bold "$@"
+}
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    style_error "Не найдена команда: $1" >&2
+    exit 1
+  fi
+}
+
+resolve_wezterm() {
+  if command -v wezterm >/dev/null 2>&1; then
+    WEZTERM_BIN="$(command -v wezterm)"
+    return
+  fi
+
+  if [ -x "/Applications/WezTerm.app/Contents/MacOS/wezterm" ]; then
+    WEZTERM_BIN="/Applications/WezTerm.app/Contents/MacOS/wezterm"
+    return
+  fi
+
+  style_error "WezTerm не найден. Ожидал \`wezterm\` в PATH или /Applications/WezTerm.app." >&2
+  exit 1
+}
+
+ensure_setup() {
+  require_cmd wget
+  require_cmd gum
+  require_cmd osascript
+  resolve_wezterm
+
+  if [ "${TERM_PROGRAM:-}" != "WezTerm" ]; then
+    style_note "Подсказка: лучше запускать из WezTerm, чтобы превью через imgcat точно отрисовалось."
+  fi
+}
+
+clear_current_file() {
+  if [ -n "$CURRENT_PREVIEW" ] && [ -f "$CURRENT_PREVIEW" ]; then
+    rm -f "$CURRENT_PREVIEW"
+  fi
+
+  CURRENT_PREVIEW=""
+  CURRENT_STAMP=""
+}
+
+build_request_url() {
+  local separator='?'
+
+  case "$SOURCE_URL" in
+    *\?*) separator='&' ;;
+  esac
+
+  printf '%s%s_cb=%s-%s\n' "$SOURCE_URL" "$separator" "$(date +%s)" "$RANDOM"
+}
+
+fetch_photo() {
+  local request_url
+  local fetch_status=0
+
+  clear_current_file
+
+  CURRENT_STAMP="$(date +%Y%m%d-%H%M%S)-$RANDOM"
+  CURRENT_PREVIEW="$(mktemp "$CACHE_DIR/wallpaper.XXXXXX.jpg")"
+  request_url="$(build_request_url)"
+
+  URL="$request_url" OUTPUT="$CURRENT_PREVIEW" \
+    gum spin \
+      --spinner dot \
+      --title "Скачиваю следующую картинку" \
+      --show-error \
+      -- bash -lc '
+        wget -q -O "$OUTPUT" "$URL"
+      ' || fetch_status=$?
+
+  if [ "$fetch_status" -ne 0 ] || [ ! -s "$CURRENT_PREVIEW" ]; then
+    style_error "Не удалось скачать картинку." >&2
+    return 1
+  fi
+}
+
+show_photo() {
+  clear
+
+  style_block "Wallpaper Picker"
+  style_note "Источник: $SOURCE_URL"
+  printf '\n'
+  "$WEZTERM_BIN" imgcat --width 100% "$CURRENT_PREVIEW"
+  printf '\n'
+}
+
+set_wallpaper() {
+  local target_file="$WALLPAPER_DIR/wallpaper-${CURRENT_STAMP}.jpg"
+  local escaped_file
+
+  cp "$CURRENT_PREVIEW" "$target_file"
+  escaped_file="$(printf '%s' "$target_file" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+
+  if ! osascript <<EOF
+tell application "System Events"
+  repeat with desktopRef in desktops
+    set picture of desktopRef to POSIX file "$escaped_file"
+  end repeat
+end tell
+EOF
+  then
+    style_error "Не удалось установить обои. Возможно, терминалу нужен доступ в System Events." >&2
+    exit 1
+  fi
+
+  style_success "Обои установлены: $target_file"
+}
+
+main() {
+  local action
+
+  ensure_setup
+
+  while true; do
+    if ! fetch_photo; then
+      action="$(gum choose \
+        --header "Не получилось скачать картинку. Что делаем?" \
+        --cursor-prefix "→ " \
+        --selected-prefix "✓ " \
+        --height 3 \
+        "Повторить" \
+        "Выход")" || exit 130
+
+      case "$action" in
+        "Повторить") continue ;;
+        "Выход") exit 0 ;;
+      esac
+    fi
+
+    while true; do
+      show_photo
+
+      action="$(gum choose \
+        --header "Что делаем?" \
+        --cursor-prefix "→ " \
+        --selected-prefix "✓ " \
+        --height 3 \
+        "Поставить на обои" \
+        "Следующая" \
+        "Выход")" || exit 130
+
+      case "$action" in
+        "Поставить на обои")
+          set_wallpaper
+          exit 0
+          ;;
+        "Следующая")
+          break
+          ;;
+        "Выход")
+          exit 0
+          ;;
+      esac
+    done
+  done
+}
+
+main "$@"
