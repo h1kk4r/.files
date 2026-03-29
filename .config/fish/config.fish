@@ -52,6 +52,9 @@ alias df duf
 alias top btm
 
 # custom
+alias py python3
+alias c clear
+alias q exit
 alias wezterm /Applications/WezTerm.app/Contents/MacOS/wezterm
 alias bg ./.bin/bg
 alias conf ./.bin/conf
