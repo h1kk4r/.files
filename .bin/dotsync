@@ -6,6 +6,7 @@ local WATCH = {
   { path = ".bin/conf.rs", label = "fetch" },
   { path = ".bin/bg", label = "bg script" },
   { path = ".bin/dotsync", label = "dotsync script" },
+  { path = ".bin/conf" , label = "config choise script" },
   { path = ".config/fish", label = "fish config" },
   { path = ".config/nvim", label = "nvim config" },
   { path = ".wezterm.lua", label = "wezterm config" },

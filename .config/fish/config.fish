@@ -9,14 +9,19 @@
 if status is-interactive
     set -g fish_greeting
 
-    if test -x $HOME/.bin/.conf
-        $HOME/.bin/.conf
+    if test -x $HOME/.bin/fetch
+        $HOME/.bin/fetch
     end
 end
+
 fish_add_path $HOME/.local/bin
 
 # Ensure Cargo binaries are on PATH
 fish_add_path $HOME/.cargo/bin
+
+# Export editor
+export VISUAL=nvim
+export EDITOR="$VISUAL"
 
 # System PATH
 set -gx DOWNLOAD $HOME/Downloads
@@ -46,5 +51,8 @@ alias du dust
 alias df duf
 alias top btm
 
-# wezterm
-alias wezterm /Applications/WezTerm.app/Contents/MacOS/wezterm > /dev/null 2>&1
+# custom
+alias wezterm /Applications/WezTerm.app/Contents/MacOS/wezterm
+alias bg ./.bin/bg
+alias conf ./.bin/conf
+alias dotsync ./.bin/dotsync

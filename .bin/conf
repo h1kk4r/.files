@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+LABELS=(
+  "fish config"
+  "wezterm config"
+  "nvim config"
+  "dotfile sync script"
+  "config choise script"
+  "background script"
+)
+
+PATHS=(
+  "$HOME/.config/fish/config.fish"
+  "$HOME/.wezterm.lua"
+  "$HOME/.config/nvim/init.vim"
+  "$HOME/.bin/dotsync"
+  "$HOME/.bin/conf"
+  "$HOME/.bin/bg"
+)
+
+style_box() {
+  gum style \
+    --border rounded \
+    --border-foreground 63 \
+    --padding "0 1" \
+    --margin "1 0" \
+    "$1"
+}
+
+style_note() {
+  gum style --foreground 246 "$1"
+}
+
+style_error() {
+  gum style --foreground 196 --bold "$1" >&2
+}
+
+pick_editor() {
+  if [[ -n "${EDITOR:-}" ]]; then
+    printf '%s\n' "$EDITOR"
+    return
+  fi
+
+  if [[ -n "${VISUAL:-}" ]]; then
+    printf '%s\n' "$VISUAL"
+    return
+  fi
+
+  local candidate
+  for candidate in nvim vim vi nano; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+
+  return 1
+}
+
+main() {
+  local editor choice target label pretty i
+  local -a options
+
+  command -v gum >/dev/null 2>&1 || {
+    printf 'gum not found\n' >&2
+    exit 1
+  }
+
+  if ! editor="$(pick_editor)"; then
+    style_error "Не найден редактор. Установите \$EDITOR или \$VISUAL."
+    exit 1
+  fi
+
+  for i in "${!LABELS[@]}"; do
+    pretty="${PATHS[$i]/$HOME/~}"
+    options+=("${LABELS[$i]}")
+  done
+
+  style_box "Open Config"
+  style_note "Editor: $editor"
+
+  choice="$(printf '%s\n' "${options[@]}" | gum choose \
+    --header "Какой конфиг открыть?" \
+    --cursor-prefix "→ " \
+    --selected-prefix "✓ " \
+    --height "${#options[@]}")" || exit 130
+
+  for i in "${!options[@]}"; do
+    if [[ "${options[$i]}" == "$choice" ]]; then
+      target="${PATHS[$i]}"
+      label="${LABELS[$i]}"
+      break
+    fi
+  done
+
+  if [[ -z "${target:-}" ]]; then
+    style_error "Не удалось определить выбранный конфиг."
+    exit 1
+  fi
+
+  if [[ ! -e "$target" ]]; then
+    style_error "Путь не найден: $target"
+    exit 1
+  fi
+
+  style_note "Открываю: $label"
+  exec bash -lc 'exec '"$editor"' "$1"' _ "$target"
+}
+
+main "$@"
