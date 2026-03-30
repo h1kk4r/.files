@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#                                    .o88o.
+#                                    888 `"
+#    .ooooo.   .ooooo.  ooo. .oo.   o888oo
+#   d88' `"Y8 d88' `88b `888P"Y88b   888
+#   888       888   888  888   888   888
+#   888   .o8 888   888  888   888   888
+#   `Y8bod8P' `Y8bod8P' o888o o888o o888o
 
 set -euo pipefail
 

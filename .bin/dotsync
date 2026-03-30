@@ -1,4 +1,12 @@
 #!/usr/bin/env lua
+--
+--    .oooo.o oooo    ooo ooo. .oo.    .ooooo.
+--   d88(  "8  `88.  .8'  `888P"Y88b  d88' `"Y8
+--   `"Y88b.    `88..8'    888   888  888
+--   o.  )88b    `888'     888   888  888   .o8
+--   8""888P'     .8'     o888o o888o `Y8bod8P'
+--            .o..P'
+--            `Y8P'
 
 local HOME = os.getenv("HOME")
 local DEST = os.getenv("DOTFILE") or (HOME .. "/Project/.files")
