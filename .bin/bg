@@ -174,7 +174,8 @@ prompt_wallpaper_name() {
       --header "Как назвать обои? Введи своё или выбери подсказку" \
       --placeholder "Например: sea4" \
       --height 10 \
-      --no-fuzzy)" || exit 130
+      --no-fuzzy \
+      --no-strict)" || exit 130
   else
     name="$(gum input \
       --header "Как назвать обои?" \

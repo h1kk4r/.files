@@ -59,3 +59,4 @@ alias wezterm /Applications/WezTerm.app/Contents/MacOS/wezterm
 alias bg ./.bin/bg
 alias conf ./.bin/conf
 alias dotsync ./.bin/dotsync
+alias wttr 'curl wttr.in/Moscow?0&lang=ru'
