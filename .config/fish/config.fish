@@ -56,7 +56,7 @@ alias py python3
 alias c clear
 alias q exit
 alias wezterm /Applications/WezTerm.app/Contents/MacOS/wezterm
-alias bg ./.bin/bg
-alias conf ./.bin/conf
-alias dotsync ./.bin/dotsync
+alias bg $HOME/.bin/bg
+alias conf $HOME/.bin/conf
+alias dotsync $HOME/.bin/dotsync
 alias wttr 'curl wttr.in/Moscow?0&lang=ru'
