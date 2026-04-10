@@ -8,10 +8,7 @@
 
 if status is-interactive
     set -g fish_greeting
-
-    if test -x $HOME/.bin/fetch
-        $HOME/.bin/fetch
-    end
+    meld
 end
 
 fish_add_path $HOME/.local/bin

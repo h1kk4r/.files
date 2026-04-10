@@ -23,10 +23,10 @@ config.font = wezterm.font_with_fallback({
   --'Monaco',
 })
 config.font_size = 13.5
-config.line_height = 1.08
+--config.line_height = 1.08
 
-config.initial_cols = 120
-config.initial_rows = 34
+config.initial_cols = 160
+config.initial_rows = 44
 config.window_padding = {
   left = 50,
   right = 50,
