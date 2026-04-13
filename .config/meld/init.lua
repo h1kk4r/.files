@@ -1,6 +1,21 @@
--- Meld init.lua
+--                               oooo        .o8
+--                               `888       "888
+--   ooo. .oo.  .oo.    .ooooo.   888   .oooo888
+--   `888P"Y88bP"Y88b  d88' `88b  888  d88' `888
+--    888   888   888  888ooo888  888  888   888
+--    888   888   888  888    .o  888  888   888
+--   o888o o888o o888o `Y8bod8P' o888o `Y8bod88P"
+
 local config = meld
-local colors = dofile("colors.lua")
+local CONFIG_DIR = os.getenv("HOME") .. "/.config/meld/"
+local colors = dofile(CONFIG_DIR .. "colors.lua")
+local spotify = dofile(CONFIG_DIR .. "spotify.lua")
+
+config.output = {
+  after = {
+    "\n",
+  }
+}
 
 config.layout = {
   align = true,
@@ -23,13 +38,13 @@ config.logo = {
   text = "(\\ /)\n".."( · ·)\n".."c("..colors.red('"')..")("..colors.red('"')..")",
 }
 
--- config.image = {
---   enabled = true,
+config.image = {
+  enabled = true,
 --   path = "assets/avatar.png",
---   height = 10,
---   crop = "center",
---   padding = 3,
--- }
+  height = "auto",
+  crop = "center",
+  padding = 3,
+}
 
 config.blocks = {
   enabled = false,
@@ -80,8 +95,10 @@ config.order = {
 config.git = "branch_or_commit"
 
 config.spotify = {
+  client_id = spotify.client_id,
+  redirect_uri = spotify.redirect_uri,
   format = "$artist —  $track",
-  cover_as_image = false,
+  cover_as_image = true,
 }
 
 -- Values:  "name", "hostname", "full"
@@ -115,7 +132,7 @@ config.gpu = "full"
 config.memory = "full"
 
 -- Values:  "percent", "status", "full"
-config.battery = "status"
+config.battery = "full"
 
 -- Values:  "used_total", "mount_used_total", "full"
 config.disk = "mount_used_total"

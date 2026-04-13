@@ -17,7 +17,11 @@ local WATCH = {
   { path = ".config/fish", label = "fish config" },
   { path = ".config/nvim", label = "nvim config" },
   { path = ".wezterm.lua", label = "wezterm config" },
-  { path = ".config/meld", label = "meld config" }
+  { path = ".config/meld", label = "meld config" },
+}
+local IGNORE = {
+  ".config/meld/spotify.lua",
+  ".config/meld/spotify-token.json",
 }
 
 local ANSI = {
@@ -69,6 +73,43 @@ local function split(path)
   local parts = {}
   for part in path:gmatch("[^/]+") do table.insert(parts, part) end
   return parts
+end
+local function normalize_rel(path) return tostring(path):gsub("^%./", ""):gsub("/+$", "") end
+local function basename(path) return normalize_rel(path):match("([^/]+)$") or normalize_rel(path) end
+local function glob_pattern(pattern)
+  local escaped = normalize_rel(pattern):gsub("([%^%$%(%)%%%.%[%]%+%-%])", "%%%1")
+  return "^" .. escaped:gsub("%*", ".*"):gsub("%?", ".") .. "$"
+end
+
+local function ignored(path)
+  local rel = normalize_rel(path)
+
+  for _, pattern in ipairs(IGNORE) do
+    local raw = tostring(pattern)
+    local dir_only = raw:sub(-1) == "/"
+    local clean = normalize_rel(raw)
+    local name_only = not clean:find("/", 1, true)
+
+    if clean ~= "" then
+      if dir_only and (rel == clean or rel:sub(1, #clean + 1) == clean .. "/") then
+        return true
+      end
+
+      if name_only and (basename(rel) == clean or rel:find("/" .. clean .. "/", 1, true)) then
+        return true
+      end
+
+      if raw:find("[%*%?]") and rel:match(glob_pattern(raw)) then
+        return true
+      end
+
+      if not raw:find("[%*%?]") and (rel == clean or rel:sub(1, #clean + 1) == clean .. "/") then
+        return true
+      end
+    end
+  end
+
+  return false
 end
 
 local function kind(path)
@@ -127,7 +168,9 @@ local function scan(entry)
     if op then
       local full = root
       if rel ~= "" then full = full .. "/" .. rel end
-      table.insert(out, { rel = full, src = src, dst = dst, op = op, label = label })
+      if not ignored(full) then
+        table.insert(out, { rel = full, src = src, dst = dst, op = op, label = label })
+      end
     end
   end
 
@@ -217,7 +260,13 @@ end
 local function prune_empty_dirs()
   for _, entry in ipairs(WATCH) do
     local path = DEST .. "/" .. entry.path
-    if is_dir(path) then run("find " .. shq(path) .. " -depth -type d -empty -delete") end
+    if is_dir(path) then
+      local found = read("find " .. shq(path) .. " -depth -type d -empty -print")
+      for dir in found:gmatch("[^\n]+") do
+        local rel = dir:sub(#DEST + 2)
+        if not ignored(rel) then run("rmdir " .. shq(dir)) end
+      end
+    end
   end
 end
 
