@@ -58,9 +58,6 @@ alias conf $HOME/.bin/conf
 alias dotsync $HOME/.bin/dotsync
 alias wttr 'curl wttr.in/Moscow?0&lang=ru'
 
-
-
-
 # >>> rune prompt >>>
 /Users/h1kkar/.bin/rune shell init fish | source
 # <<< rune prompt <<<
