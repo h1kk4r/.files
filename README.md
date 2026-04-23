@@ -8,8 +8,8 @@ about
 * editor: `nvim`
 
 screenshots
-<img src="https://github.com/h1kk4r/.files/blob/master/scr/01.png">
-<img src="https://github.com/h1kk4r/.files/blob/master/scr/02.png">
-<img src="https://github.com/h1kk4r/.files/blob/master/scr/03.png">
-<img src="https://github.com/h1kk4r/.files/blob/master/scr/04.png">
-<img src="https://github.com/h1kk4r/.files/blob/master/scr/05.png">
+<img src="https://github.com/h1kk4r/.files/blob/main/scr/01.png">
+<img src="https://github.com/h1kk4r/.files/blob/main/scr/02.png">
+<img src="https://github.com/h1kk4r/.files/blob/main/scr/03.png">
+<img src="https://github.com/h1kk4r/.files/blob/main/scr/04.png">
+<img src="https://github.com/h1kk4r/.files/blob/main/scr/05.png">
