@@ -14,6 +14,7 @@ LABELS=(
   "wezterm config"
   "nvim config"
   "meld config"
+  "rune config"
   "dotfile sync script"
   "config choise script"
   "background script"
@@ -24,6 +25,7 @@ PATHS=(
   "$HOME/.wezterm.lua"
   "$HOME/.config/nvim/init.vim"
   "$HOME/.config/meld/init.lua"
+  "$HOME/.config/rune/config.exs"
   "$HOME/.bin/dotsync"
   "$HOME/.bin/conf"
   "$HOME/.bin/bg"
@@ -88,7 +90,7 @@ main() {
   done
 
   style_box "Open Config"
-  style_note "Editor: $editor"
+#  style_note "Editor: $editor"
 
   choice="$(printf '%s\n' "${options[@]}" | gum choose \
     --header "Какой конфиг открыть?" \
@@ -114,7 +116,7 @@ main() {
     exit 1
   fi
 
-  style_note "Открываю: $label"
+#  style_note "Открываю: $label"
   exec bash -lc 'exec '"$editor"' "$1"' _ "$target"
 }
 

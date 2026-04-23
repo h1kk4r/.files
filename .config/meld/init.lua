@@ -56,15 +56,15 @@ config.blocks = {
 config.labels = {
   directory = "Directory",
   git = "Git",
-  spotify = colors.green("now"),
+  spotify = colors.magenta("now"),
   host = "Host",
-  os = colors.blue("os"),
+  os = colors.red("os"),
   kernel = colors.red("kr"),
   uptime = "Uptime",
   packages = "Packages",
-  shell = colors.bright_cyan("sh"),
-  terminal = "Terminal",
-  cpu = "CPU",
+  shell = colors.green("sh"),
+  terminal = colors.blue("tr"),
+  cpu = colors.yellow("cpu"),
   gpu = "GPU",
   memory = "Memory",
   battery = "Battery",
@@ -73,17 +73,16 @@ config.labels = {
 }
 
 config.order = {
-  "kernel",
   "os",
+  "cpu",
   "shell",
+  "terminal",
   "spotify",
   --"directory",
   --"git",
   --"host",
   --"uptime",
   --"packages",
-  --"terminal",
-  --"cpu",
   --"gpu",
   --"memory",
   --"battery",
@@ -123,7 +122,7 @@ config.shell = "name"
 config.terminal = "full"
 
 -- Values:  "model", "model_cores", "full"
-config.cpu = "model_cores"
+config.cpu = "model"
 
 -- Values:  "model", "model_cores", "full"
 config.gpu = "full"

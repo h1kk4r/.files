@@ -18,6 +18,7 @@ local WATCH = {
   { path = ".config/nvim", label = "nvim config" },
   { path = ".wezterm.lua", label = "wezterm config" },
   { path = ".config/meld", label = "meld config" },
+  { path = ".config/rune", label = "rune config" },
 }
 local IGNORE = {
   ".config/meld/spotify.lua",
